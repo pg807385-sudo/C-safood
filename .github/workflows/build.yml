@@ -1,27 +1,23 @@
 name: Build Android APK
 
-# Runs automatically whenever you push the zip (or any change) to the repo,
-# and can also be triggered manually from the Actions tab.
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/build-apk.yml'
+  workflow_dispatch: {}
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-
-      - name: Unzip project
-        run: |
-          if [ -f saifoods-complete.zip ]; then
-            unzip -o saifoods-complete.zip -d .
-          else
-            echo "saifoods-complete.zip not found in repo root — make sure it was uploaded there."
-            exit 1
-          fi
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -34,28 +30,45 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('frontend/android/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: gradle-${{ runner.os }}-
+
       - name: Install frontend dependencies
-        working-directory: frontend
         run: npm install
 
-      - name: Build frontend
-        working-directory: frontend
+      - name: Build web assets
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
         run: npm run build
 
-      - name: Install Capacitor CLI + Android platform
-        working-directory: frontend
-        run: |
-          npm install @capacitor/core @capacitor/cli @capacitor/android
-          npx cap sync android || npx cap add android
+      - name: Install Capacitor Android platform
+        run: npm install @capacitor/core @capacitor/cli @capacitor/android
 
-      - name: Build APK with Gradle
-        working-directory: frontend/android
+      - name: Add Android platform (first run only)
         run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Grant execute permission to gradlew
+        run: chmod +x android/gradlew
+
+      - name: Build debug APK
+        working-directory: frontend/android
+        run: ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: saifoods-apk
+          name: saifoods-debug-apk
           path: frontend/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
