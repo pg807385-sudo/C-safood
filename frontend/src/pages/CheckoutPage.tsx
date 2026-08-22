@@ -6,23 +6,6 @@ import { Address, CartPricing } from '../types'
 import toast from 'react-hot-toast'
 import { MapPinIcon, TagIcon } from '@heroicons/react/24/outline'
 
-declare global {
-  interface Window {
-    Razorpay: any
-  }
-}
-
-function loadRazorpayScript(): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (window.Razorpay) return resolve(true)
-    const script = document.createElement('script')
-    script.src = 'https://checkout.razorpay.com/v1/checkout.js'
-    script.onload = () => resolve(true)
-    script.onerror = () => resolve(false)
-    document.body.appendChild(script)
-  })
-}
-
 export default function CheckoutPage() {
   const [addresses, setAddresses] = useState<Address[]>([])
   const [selectedAddressId, setSelectedAddressId] = useState('')
@@ -61,46 +44,12 @@ export default function CheckoutPage() {
       })
       const order = orderRes.data.data
 
-      const paymentRes = await api.post('/payments/create-order', { orderId: order.id })
-      const { razorpayOrder } = paymentRes.data.data
-
-      const scriptLoaded = await loadRazorpayScript()
-      if (!scriptLoaded) {
-        toast.error('Could not load payment gateway. Please try again.')
-        setPlacing(false)
-        return
-      }
-
-      const razorpay = new window.Razorpay({
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID,
-        amount: razorpayOrder.amount,
-        currency: razorpayOrder.currency,
-        name: 'SaifFoods',
-        description: `Order #${order.orderNumber}`,
-        order_id: razorpayOrder.id,
-        handler: async (response: any) => {
-          try {
-            await api.post('/payments/verify', {
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-              orderId: order.id,
-            })
-            setItemCount(0)
-            toast.success('Order placed successfully!')
-            navigate(`/orders/${order.id}`)
-          } catch {
-            toast.error('Payment verification failed')
-          }
-        },
-        modal: {
-          ondismiss: () => setPlacing(false),
-        },
-        theme: { color: '#ea580c' },
-      })
-      razorpay.open()
+      setItemCount(0)
+      toast.success('Order placed successfully!')
+      navigate(`/orders/${order.id}`)
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Could not place order')
+    } finally {
       setPlacing(false)
     }
   }
@@ -195,8 +144,8 @@ export default function CheckoutPage() {
         disabled={placing || addresses.length === 0}
         className="btn-primary w-full py-3"
       >
-        {placing ? 'Processing...' : 'Place Order & Pay'}
+        {placing ? 'Placing order...' : 'Place Order'}
       </button>
     </div>
   )
-}
+    }
