@@ -30,11 +30,6 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Verify Java version
-        run: |
-          java -version
-          echo "JAVA_HOME=$JAVA_HOME"
-
       - name: Cache Gradle
         uses: actions/cache@v4
         with:
@@ -64,13 +59,21 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      - name: Fix duplicate Kotlin stdlib classes
+        run: |
+          cat >> android/app/build.gradle << 'EOF'
+
+          configurations.all {
+              exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
+              exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+          }
+          EOF
+
       - name: Grant execute permission to gradlew
         run: chmod +x android/gradlew
 
       - name: Build debug APK
         working-directory: frontend/android
-        env:
-          JAVA_HOME: ${{ env.JAVA_HOME }}
         run: ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK artifact
@@ -79,4 +82,3 @@ jobs:
           name: saifoods-debug-apk
           path: frontend/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
-          
